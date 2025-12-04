@@ -7,6 +7,12 @@ export type AnimationType = 'none' | 'fade' | 'slide-up' | 'slide-right' | 'zoom
 export type ObjectFitType = 'cover' | 'contain' | 'fill' | 'none'
 export type FontFamily = 'Space Grotesk' | 'Inter' | 'Playfair Display' | 'Roboto Mono' | 'Lobster' | 'Oswald' | 'Pacifico' | 'Anton' | 'Dancing Script' | 'Bebas Neue' | 'Abril Fatface' | 'Shadows Into Light'
 
+export const fontFamilies: FontFamily[] = [
+  'Space Grotesk', 'Inter', 'Playfair Display', 'Roboto Mono', 
+  'Lobster', 'Oswald', 'Pacifico', 'Anton', 
+  'Dancing Script', 'Bebas Neue', 'Abril Fatface', 'Shadows Into Light'
+]
+
 export type Layer = {
   id: string
   type: LayerType
@@ -17,7 +23,7 @@ export type Layer = {
   height: string | number
   bgColor: string
   content: string
-  linkType: 'external' | 'internal'
+  linkType: 'none' | 'external' | 'internal'
   linkUrl: string
   targetPageId: string
   image: string
@@ -50,32 +56,35 @@ export type Page = {
 
 type BrandState = {
   pages: Page[]
-  activePageId: string | null // Se null, nenhum artboard selecionado especificamente
+  activePageId: string | null
   selectedLayerId: string | null
+  clipboard: Layer | null
   
-  // Viewport (Câmera)
   isPreviewMode: boolean
   showGrid: boolean
+  isPanLocked: boolean
   gridSize: number
   viewX: number
   viewY: number
   viewZoom: number
+  presentationZoom: boolean
   
-  // Actions
   selectLayer: (id: string | null, pageId?: string) => void
   updateLayer: (pageId: string, layerId: string, data: Partial<Layer>) => void
   addLayer: (pageId: string, type: LayerType, shape?: ShapeType) => void
   removeLayer: (pageId: string, layerId: string) => void
   bringToFront: (pageId: string, layerId: string) => void
+  copyLayer: () => void
+  pasteLayer: () => void
   
-  // Page Actions
   addPage: () => void
   updatePage: (id: string, data: Partial<Page>) => void
   deletePage: (id: string) => void
   
-  // View Actions
   setPreviewMode: (mode: boolean) => void
   toggleGrid: () => void
+  togglePanLock: () => void
+  togglePresentationZoom: () => void
   setCamera: (x: number, y: number, zoom: number) => void
   resetAnimations: () => void
 }
@@ -86,17 +95,22 @@ export const useBrandStore = create<BrandState>()(
       pages: [{ id: 'home', name: 'Home', x: 100, y: 100, width: 1200, height: 800, layers: [], bgColor: '#ffffff' }],
       activePageId: 'home',
       selectedLayerId: null,
+      clipboard: null,
       
       isPreviewMode: false,
       showGrid: true,
+      isPanLocked: false,
       gridSize: 20,
       viewX: 0,
       viewY: 0,
       viewZoom: 0.8,
+      presentationZoom: true,
 
       selectLayer: (id, pageId) => set({ selectedLayerId: id, activePageId: pageId || null }),
       setPreviewMode: (mode) => set({ isPreviewMode: mode, selectedLayerId: null }),
       toggleGrid: () => set((state) => ({ showGrid: !state.showGrid })),
+      togglePanLock: () => set((state) => ({ isPanLocked: !state.isPanLocked })),
+      togglePresentationZoom: () => set((state) => ({ presentationZoom: !state.presentationZoom })),
       setCamera: (x, y, zoom) => set({ viewX: x, viewY: y, viewZoom: zoom }),
       
       addPage: () => set((state) => {
@@ -131,13 +145,8 @@ export const useBrandStore = create<BrandState>()(
       resetAnimations: () => {
         const state = get()
         const storedPages = JSON.parse(JSON.stringify(state.pages))
-        
-        // Remove layers temporarily to force re-mount
         set((s) => ({ pages: s.pages.map(p => ({ ...p, layers: [] })) }))
-        
-        setTimeout(() => {
-            set({ pages: storedPages })
-        }, 50)
+        setTimeout(() => { set({ pages: storedPages }) }, 50)
       },
 
       updateLayer: (pageId, layerId, data) => set((state) => ({
@@ -158,7 +167,7 @@ export const useBrandStore = create<BrandState>()(
           zIndex: 10,
           bgColor: '#EAFFD0',
           content: '',
-          linkType: 'external',
+          linkType: 'none',
           linkUrl: '',
           targetPageId: '',
           image: '',
@@ -212,6 +221,33 @@ export const useBrandStore = create<BrandState>()(
                 ? { ...p, layers: p.layers.map(l => l.id === layerId ? { ...l, zIndex: maxZ + 1 } : l) }
                 : p
             )
+        }
+      }),
+
+      copyLayer: () => set((state) => {
+        if (!state.selectedLayerId || !state.activePageId) return state
+        const page = state.pages.find(p => p.id === state.activePageId)
+        const layer = page?.layers.find(l => l.id === state.selectedLayerId)
+        return { clipboard: layer ? { ...layer } : null }
+      }),
+
+      pasteLayer: () => set((state) => {
+        if (!state.clipboard || !state.activePageId) return state
+        const newLayer = { 
+            ...state.clipboard, 
+            id: crypto.randomUUID(), 
+            x: state.clipboard.x + 20, 
+            y: state.clipboard.y + 20,
+            zIndex: 20
+        }
+        
+        return {
+            pages: state.pages.map(p => 
+                p.id === state.activePageId 
+                ? { ...p, layers: [...p.layers, newLayer] }
+                : p
+            ),
+            selectedLayerId: newLayer.id
         }
       })
     }),

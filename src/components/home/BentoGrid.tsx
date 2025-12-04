@@ -13,9 +13,58 @@ export default function BentoGrid() {
 
   useEffect(() => setIsMounted(true), [])
 
- 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+        if (store.isPreviewMode) return
+        
+        const target = e.target as HTMLElement
+        const isEditingText = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA'
+
+        if (e.ctrlKey || e.metaKey) {
+            if (e.key === 'c' && !isEditingText) {
+                e.preventDefault()
+                store.copyLayer()
+            }
+            if (e.key === 'v' && !isEditingText) {
+                e.preventDefault()
+                store.pasteLayer()
+            }
+        }
+        
+        if ((e.key === 'Delete' || e.key === 'Backspace') && !isEditingText) {
+            if (store.activePageId && store.selectedLayerId) {
+                store.removeLayer(store.activePageId, store.selectedLayerId)
+            }
+        }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [store])
+
+  useEffect(() => {
+    if (store.isPreviewMode && isMounted) {
+        const targetId = store.activePageId || 'home'
+        const page = store.pages.find(p => p.id === targetId)
+        
+        if (page) {
+            const viewportWidth = window.innerWidth
+            
+            const scale = viewportWidth / page.width
+            
+            store.setCamera(
+                -page.x * scale, 
+                -page.y * scale, 
+                scale
+            )
+        }
+    }
+  }, [store.isPreviewMode, store.activePageId, isMounted, store.pages])
+
   useEffect(() => {
     const handleWheel = (e: WheelEvent) => {
+      
+      if (store.isPreviewMode) return
+
       if (e.ctrlKey || e.metaKey) {
         e.preventDefault()
         const delta = e.deltaY > 0 ? 0.9 : 1.1
@@ -25,12 +74,10 @@ export default function BentoGrid() {
     }
     window.addEventListener('wheel', handleWheel, { passive: false })
     return () => window.removeEventListener('wheel', handleWheel)
-  }, [store.viewZoom, store.viewX, store.viewY])
+  }, [store.viewZoom, store.viewX, store.viewY, store.isPreviewMode])
 
-  
   const handleMouseDown = (e: React.MouseEvent) => {
-    
-    if (e.button === 1 || e.button === 0) {
+    if ((e.button === 1 || e.button === 0) && !store.isPreviewMode && !store.isPanLocked) {
       setIsPanning(true)
     }
   }
@@ -45,19 +92,10 @@ export default function BentoGrid() {
 
   if (!isMounted) return null
 
-  const handleInteraction = (pageId: string, layerId: string, linkType: string, url: string, targetPage: string) => {
+  const handleInteraction = (pageId: string, layerId: string, linkType: string, url: string, targetPageId: string) => {
      if (store.isPreviewMode) {
-         if (linkType === 'internal' && targetPage) {
-            
-            const target = store.pages.find(p => p.id === targetPage)
-            if (target) {
-                
-                store.setCamera(
-                    -target.x * store.viewZoom + (window.innerWidth / 2) - (target.width * store.viewZoom / 2),
-                    -target.y * store.viewZoom + (window.innerHeight / 2) - (target.height * store.viewZoom / 2),
-                    store.viewZoom
-                )
-            }
+         if (linkType === 'internal' && targetPageId) {
+            store.selectLayer(null, targetPageId)
          } else if (linkType === 'external' && url) {
             window.open(url, '_blank')
          }
@@ -69,16 +107,15 @@ export default function BentoGrid() {
   return (
     <div 
         ref={containerRef}
-        className={`w-full h-screen overflow-hidden relative ${isPanning ? 'cursor-grabbing' : 'cursor-grab'} bg-[#1e1e1e]`}
+        className={`w-full h-full overflow-hidden relative ${isPanning ? 'cursor-grabbing' : store.isPanLocked ? 'cursor-default' : 'cursor-grab'} bg-[#1e1e1e]`}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
         onContextMenu={(e) => e.preventDefault()}
     >
-      
       <div 
-        className="absolute top-0 left-0 origin-top-left will-change-transform"
+        className="absolute top-0 left-0 origin-top-left will-change-transform transition-transform duration-300 ease-out"
         style={{
             transform: `translate(${store.viewX}px, ${store.viewY}px) scale(${store.viewZoom})`
         }}
@@ -86,7 +123,7 @@ export default function BentoGrid() {
           {store.pages.map((page) => (
             <div
                 key={page.id}
-                className="absolute bg-white shadow-2xl transition-shadow hover:shadow-[0_0_50px_rgba(0,0,0,0.3)]"
+                className={`absolute bg-white shadow-2xl transition-shadow ${!store.isPreviewMode ? 'hover:shadow-[0_0_50px_rgba(0,0,0,0.3)] ring-1 ring-black/5' : ''}`}
                 style={{
                     left: page.x,
                     top: page.y,
@@ -97,21 +134,18 @@ export default function BentoGrid() {
                     backgroundSize: `${store.gridSize}px ${store.gridSize}px`
                 }}
                 onMouseDown={(e) => {
-                    
                     if (!store.isPreviewMode) {
                         e.stopPropagation() 
                         store.selectLayer(null, page.id)
                     }
                 }}
             >
-               
                 {!store.isPreviewMode && (
-                    <div className="absolute -top-8 left-0 text-white/50 text-xs font-bold uppercase tracking-widest pointer-events-none">
+                    <div className="absolute -top-8 left-0 text-white/50 text-xs font-bold uppercase tracking-widest pointer-events-none select-none">
                         {page.name}
                     </div>
                 )}
 
-               
                 {page.layers.map((layer) => (
                     <Rnd
                     key={layer.id}
@@ -134,7 +168,7 @@ export default function BentoGrid() {
                     disableDragging={store.selectedLayerId !== layer.id || store.isPreviewMode}
                     enableResizing={store.selectedLayerId === layer.id && !store.isPreviewMode ? undefined : false}
                     bounds="parent"
-                    className={`group ${store.selectedLayerId === layer.id && !store.isPreviewMode ? 'ring-2 ring-blue-500 z-[999] !important' : ''}`}
+                    className={`group ${store.selectedLayerId === layer.id && !store.isPreviewMode ? 'ring-2 ring-blue-500 z-[999] !important' : ''} ${layer.linkType !== 'none' && store.isPreviewMode ? 'cursor-pointer hover:ring-2 hover:ring-blue-400/50' : ''}`}
                     style={{ 
                         zIndex: layer.zIndex,
                         animationDelay: `${layer.animationDelay}s`,
@@ -176,9 +210,6 @@ export default function BentoGrid() {
                                         {[1, 2, 3, 4, 5].map((i) => (
                                             <div key={i} className="h-[80%] aspect-square bg-layout-green rounded-xl border-4 border-white shadow-sm flex-shrink-0" />
                                         ))}
-                                        {[1, 2, 3, 4, 5].map((i) => (
-                                            <div key={`clone-${i}`} className="h-[80%] aspect-square bg-layout-green rounded-xl border-4 border-white shadow-sm flex-shrink-0" />
-                                        ))}
                                     </div>
                                 </div>
                             )}
@@ -188,7 +219,7 @@ export default function BentoGrid() {
                                     <span 
                                         className="whitespace-pre-wrap font-black text-black leading-none text-center" 
                                         style={{ 
-                                            fontSize: `${layer.fontSize || (layer.type === 'header' ? 1.5 : 4)}rem`,
+                                            fontSize: `${layer.fontSize}rem`,
                                             textShadow: layer.image ? '0 2px 10px rgba(255,255,255,0.5)' : 'none'
                                         }}
                                     >
@@ -202,7 +233,6 @@ export default function BentoGrid() {
             </div>
           ))}
       </div>
-
     </div>
   )
 }
