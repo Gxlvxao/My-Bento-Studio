@@ -4,6 +4,7 @@ import { useBrandStore } from '@/store/brandStore'
 import { Rnd } from 'react-rnd'
 import Image from 'next/image'
 import { useEffect, useState, useRef } from 'react'
+import { ChevronRight, Globe } from 'lucide-react'
 
 export default function BentoGrid() {
   const store = useBrandStore()
@@ -180,12 +181,15 @@ export default function BentoGrid() {
                     }}
                     >
                         <div 
-                            className={`w-full h-full relative overflow-hidden flex items-center justify-center anim-${layer.animation} ${layer.type === 'shape' && layer.shapeType !== 'rect' && layer.shapeType !== 'circle' ? `shape-${layer.shapeType}` : ''}`}
+                            className={`w-full h-full relative overflow-hidden flex items-center justify-center anim-${layer.animation} 
+                                ${layer.type === 'shape' && !['rect', 'circle', 'pill'].includes(layer.shapeType || '') ? `shape-${layer.shapeType}` : ''}
+                                ${layer.type === 'shape' && layer.shapeType === 'blob' ? 'shape-blob' : ''}
+                            `}
                             style={{ 
                                 backgroundColor: layer.bgColor, 
                                 borderRadius: layer.borderRadius,
-                                filter: `blur(${layer.blur}px) grayscale(${layer.grayscale}%) drop-shadow(${layer.shadow ? '0 10px 20px rgba(0,0,0,0.3)' : '0 0 0 transparent'})`,
-                                fontFamily: layer.fontFamily
+                                filter: `blur(${layer.blur}px) grayscale(${layer.grayscale}%) drop-shadow(${layer.shadow ? '0 10px 20px rgba(0,0,0,0.1)' : '0 0 0 transparent'})`,
+                                fontFamily: layer.fontFamily,
                             }}
                         >
                             {layer.image && (
@@ -204,6 +208,61 @@ export default function BentoGrid() {
                                 </>
                             )}
 
+                            {layer.type === 'sidebar' && (
+                                <div className="w-full h-full flex flex-col justify-between py-8">
+                                    <div className="w-full px-6 flex flex-col gap-6">
+                                        <div className="w-8 h-8 bg-black text-white rounded-lg flex items-center justify-center font-bold text-xs">BE</div>
+                                        <div className="flex flex-col gap-2">
+                                            {layer.sidebarItems?.map((item) => (
+                                                <button 
+                                                    key={item.id}
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleInteraction(page.id, layer.id, item.linkType, item.linkUrl, item.targetPageId);
+                                                    }}
+                                                    className="w-full text-left px-3 py-2.5 rounded-lg text-sm font-medium text-gray-600 hover:bg-black/5 hover:text-black transition-all flex items-center justify-between group"
+                                                >
+                                                    {item.label}
+                                                    {item.linkType !== 'none' && <ChevronRight size={14} className="opacity-0 group-hover:opacity-100 transition-opacity -translate-x-2 group-hover:translate-x-0" />}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                    
+                                    {layer.showLanguageSwitcher && (
+                                        <div className="px-6 border-t border-black/5 pt-6">
+                                            <button className="flex items-center gap-2 text-xs font-bold text-gray-500 hover:text-black transition-colors">
+                                                <Globe size={14} />
+                                                <span>PT-BR</span>
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {layer.type === 'modern-navbar' && (
+                                <div className="w-full h-full flex items-center justify-between px-8">
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-3 h-3 rounded-full bg-red-400" />
+                                        <div className="w-3 h-3 rounded-full bg-yellow-400" />
+                                        <div className="w-3 h-3 rounded-full bg-green-400" />
+                                    </div>
+                                    <div className="flex gap-6 text-sm font-bold text-gray-600">
+                                        <span>Início</span>
+                                        <span>Sobre</span>
+                                        <span>Projetos</span>
+                                        <span>Contato</span>
+                                    </div>
+                                    <button className="px-4 py-2 bg-black text-white rounded-full text-xs font-bold">
+                                        Entrar
+                                    </button>
+                                </div>
+                            )}
+
+                            {layer.type === 'separator' && (
+                                <div className="w-full h-full bg-current opacity-20" />
+                            )}
+
                             {layer.type === 'marquee' && (
                                 <div className="flex gap-4 w-full h-full items-center overflow-hidden mask-linear-fade">
                                     <div className="flex gap-4 animate-marquee-infinite min-w-full">
@@ -214,7 +273,7 @@ export default function BentoGrid() {
                                 </div>
                             )}
 
-                            {layer.content && (
+                            {layer.content && layer.type !== 'sidebar' && layer.type !== 'modern-navbar' && (
                                 <div className="w-full h-full flex flex-col justify-center items-center p-4 relative z-10 pointer-events-none">
                                     <span 
                                         className="whitespace-pre-wrap font-black text-black leading-none text-center" 

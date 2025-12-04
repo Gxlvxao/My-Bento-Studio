@@ -1,8 +1,8 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 
-export type LayerType = 'header' | 'text-zone' | 'image-zone' | 'marquee' | 'shape' | 'custom-text'
-export type ShapeType = 'rect' | 'circle' | 'triangle' | 'star' | 'hexagon' | 'rhombus' | 'message'
+export type LayerType = 'header' | 'text-zone' | 'image-zone' | 'marquee' | 'shape' | 'custom-text' | 'sidebar' | 'modern-navbar' | 'separator'
+export type ShapeType = 'rect' | 'circle' | 'triangle' | 'star' | 'hexagon' | 'rhombus' | 'message' | 'blob' | 'pill'
 export type AnimationType = 'none' | 'fade' | 'slide-up' | 'slide-right' | 'zoom' | 'float' | 'pulse'
 export type ObjectFitType = 'cover' | 'contain' | 'fill' | 'none'
 export type FontFamily = 'Space Grotesk' | 'Inter' | 'Playfair Display' | 'Roboto Mono' | 'Lobster' | 'Oswald' | 'Pacifico' | 'Anton' | 'Dancing Script' | 'Bebas Neue' | 'Abril Fatface' | 'Shadows Into Light'
@@ -12,6 +12,14 @@ export const fontFamilies: FontFamily[] = [
   'Lobster', 'Oswald', 'Pacifico', 'Anton', 
   'Dancing Script', 'Bebas Neue', 'Abril Fatface', 'Shadows Into Light'
 ]
+
+export type SidebarItem = {
+  id: string
+  label: string
+  linkType: 'none' | 'internal' | 'external'
+  linkUrl: string
+  targetPageId: string
+}
 
 export type Layer = {
   id: string
@@ -41,6 +49,8 @@ export type Layer = {
   shadow: boolean
   animation: AnimationType
   animationDelay: number
+  sidebarItems?: SidebarItem[]
+  showLanguageSwitcher?: boolean
 }
 
 export type Page = {
@@ -139,7 +149,15 @@ export const useBrandStore = create<BrandState>()(
 
       deletePage: (id) => set((state) => {
         if (state.pages.length <= 1) return state
-        return { pages: state.pages.filter(p => p.id !== id) }
+        
+        const newPages = state.pages.filter(p => p.id !== id)
+        const newActiveId = state.activePageId === id ? (newPages[newPages.length - 1]?.id || newPages[0].id) : state.activePageId
+
+        return { 
+            pages: newPages,
+            activePageId: newActiveId,
+            selectedLayerId: null
+        }
       }),
 
       resetAnimations: () => {
@@ -188,9 +206,31 @@ export const useBrandStore = create<BrandState>()(
 
         if (type === 'header') { baseLayer.width = '100%'; baseLayer.height = 100; baseLayer.bgColor = '#F8B5AF'; baseLayer.content = 'HEADER'; baseLayer.x = 0; baseLayer.y = 0; }
         if (type === 'text-zone') { baseLayer.width = 400; baseLayer.height = 300; baseLayer.bgColor = '#C6E2FF'; baseLayer.content = 'TEXT'; baseLayer.borderRadius = '40px'; baseLayer.fontSize = 6; }
-        if (type === 'custom-text') { baseLayer.width = 300; baseLayer.height = 80; baseLayer.bgColor = 'transparent'; baseLayer.content = 'Novo Texto'; }
+        if (type === 'custom-text') { baseLayer.width = 300; baseLayer.height = 80; baseLayer.bgColor = 'transparent'; baseLayer.content = 'Design Text'; }
         if (type === 'shape' && shapeType === 'circle') { baseLayer.width = 150; baseLayer.height = 150; baseLayer.borderRadius = '50%'; }
         
+        if (type === 'sidebar') { 
+            baseLayer.width = 250; 
+            baseLayer.height = '100%'; 
+            baseLayer.bgColor = '#ffffff'; 
+            baseLayer.borderRadius = '0px'; 
+            baseLayer.shadow = true;
+            baseLayer.x = 0; 
+            baseLayer.y = 0;
+            baseLayer.sidebarItems = [
+                { id: crypto.randomUUID(), label: 'Início', linkType: 'none', linkUrl: '', targetPageId: '' },
+                { id: crypto.randomUUID(), label: 'Projetos', linkType: 'none', linkUrl: '', targetPageId: '' },
+                { id: crypto.randomUUID(), label: 'Sobre', linkType: 'none', linkUrl: '', targetPageId: '' }
+            ];
+            baseLayer.showLanguageSwitcher = true;
+        }
+        
+        if (type === 'modern-navbar') { baseLayer.width = 600; baseLayer.height = 70; baseLayer.bgColor = '#ffffff'; baseLayer.borderRadius = '100px'; baseLayer.shadow = true; baseLayer.content = 'Menu'; baseLayer.fontSize = 1; }
+        if (type === 'separator') { baseLayer.width = 400; baseLayer.height = 4; baseLayer.bgColor = '#000000'; baseLayer.borderRadius = '2px'; }
+        
+        if (type === 'shape' && shapeType === 'blob') { baseLayer.width = 300; baseLayer.height = 300; baseLayer.bgColor = '#ffde59'; baseLayer.borderRadius = '0%'; }
+        if (type === 'shape' && shapeType === 'pill') { baseLayer.width = 200; baseLayer.height = 60; baseLayer.bgColor = '#000'; baseLayer.borderRadius = '100px'; }
+
         return {
             pages: state.pages.map(page => 
                 page.id === pageId 
