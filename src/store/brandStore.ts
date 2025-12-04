@@ -40,108 +40,120 @@ export type Layer = {
 export type Page = {
   id: string
   name: string
+  x: number
+  y: number
+  width: number
+  height: number
   layers: Layer[]
   bgColor: string
 }
 
 type BrandState = {
   pages: Page[]
-  activePageId: string
-  selectedId: string | null
+  activePageId: string | null // Se null, nenhum artboard selecionado especificamente
+  selectedLayerId: string | null
   
-  // Viewport Settings
+  // Viewport (Câmera)
+  isPreviewMode: boolean
   showGrid: boolean
   gridSize: number
-  canvasHeight: number
-  viewportZoom: number
+  viewX: number
+  viewY: number
+  viewZoom: number
   
   // Actions
-  selectLayer: (id: string | null) => void
-  updateLayer: (id: string, data: Partial<Layer>) => void
-  addLayer: (type: LayerType, shape?: ShapeType) => void
-  removeLayer: (id: string) => void
-  bringToFront: (id: string) => void
+  selectLayer: (id: string | null, pageId?: string) => void
+  updateLayer: (pageId: string, layerId: string, data: Partial<Layer>) => void
+  addLayer: (pageId: string, type: LayerType, shape?: ShapeType) => void
+  removeLayer: (pageId: string, layerId: string) => void
+  bringToFront: (pageId: string, layerId: string) => void
   
   // Page Actions
   addPage: () => void
-  setActivePage: (id: string) => void
+  updatePage: (id: string, data: Partial<Page>) => void
   deletePage: (id: string) => void
-  renamePage: (id: string, name: string) => void
   
   // View Actions
+  setPreviewMode: (mode: boolean) => void
   toggleGrid: () => void
-  setCanvasHeight: (height: number) => void
-  setZoom: (zoom: number) => void
+  setCamera: (x: number, y: number, zoom: number) => void
   resetAnimations: () => void
 }
 
 export const useBrandStore = create<BrandState>()(
   persist(
     (set, get) => ({
-      pages: [{ id: 'home', name: 'Home', layers: [], bgColor: '#ffffff' }],
+      pages: [{ id: 'home', name: 'Home', x: 100, y: 100, width: 1200, height: 800, layers: [], bgColor: '#ffffff' }],
       activePageId: 'home',
-      selectedId: null,
+      selectedLayerId: null,
+      
+      isPreviewMode: false,
       showGrid: true,
       gridSize: 20,
-      canvasHeight: 1080,
-      viewportZoom: 1,
+      viewX: 0,
+      viewY: 0,
+      viewZoom: 0.8,
 
-      selectLayer: (id) => set({ selectedId: id }),
+      selectLayer: (id, pageId) => set({ selectedLayerId: id, activePageId: pageId || null }),
+      setPreviewMode: (mode) => set({ isPreviewMode: mode, selectedLayerId: null }),
       toggleGrid: () => set((state) => ({ showGrid: !state.showGrid })),
-      setCanvasHeight: (h) => set({ canvasHeight: h }),
-      setZoom: (z) => set({ viewportZoom: z }),
+      setCamera: (x, y, zoom) => set({ viewX: x, viewY: y, viewZoom: zoom }),
       
       addPage: () => set((state) => {
+        const lastPage = state.pages[state.pages.length - 1]
+        const newX = lastPage ? lastPage.x + lastPage.width + 100 : 100
         const newId = crypto.randomUUID()
+        
         return {
-            pages: [...state.pages, { id: newId, name: `Página ${state.pages.length + 1}`, layers: [], bgColor: '#ffffff' }],
-            activePageId: newId,
-            selectedId: null
+            pages: [...state.pages, { 
+                id: newId, 
+                name: `Page ${state.pages.length + 1}`, 
+                x: newX, 
+                y: 100, 
+                width: 1200, 
+                height: 800, 
+                layers: [], 
+                bgColor: '#ffffff' 
+            }],
+            activePageId: newId
         }
       }),
 
-      setActivePage: (id) => set({ activePageId: id, selectedId: null }),
+      updatePage: (id, data) => set((state) => ({
+        pages: state.pages.map(p => p.id === id ? { ...p, ...data } : p)
+      })),
 
       deletePage: (id) => set((state) => {
         if (state.pages.length <= 1) return state
-        const remaining = state.pages.filter(p => p.id !== id)
-        return { pages: remaining, activePageId: remaining[0].id, selectedId: null }
+        return { pages: state.pages.filter(p => p.id !== id) }
       }),
-
-      renamePage: (id, name) => set((state) => ({
-        pages: state.pages.map(p => p.id === id ? { ...p, name } : p)
-      })),
 
       resetAnimations: () => {
         const state = get()
-        const currentPage = state.pages.find(p => p.id === state.activePageId)
-        if (!currentPage) return
+        const storedPages = JSON.parse(JSON.stringify(state.pages))
         
-        const originalLayers = currentPage.layers
-        set((state) => ({
-             pages: state.pages.map(p => p.id === state.activePageId ? { ...p, layers: [] } : p)
-        }))
+        // Remove layers temporarily to force re-mount
+        set((s) => ({ pages: s.pages.map(p => ({ ...p, layers: [] })) }))
+        
         setTimeout(() => {
-            set((state) => ({
-                pages: state.pages.map(p => p.id === state.activePageId ? { ...p, layers: originalLayers } : p)
-           }))
-        }, 10)
+            set({ pages: storedPages })
+        }, 50)
       },
 
-      updateLayer: (id, data) => set((state) => ({
+      updateLayer: (pageId, layerId, data) => set((state) => ({
         pages: state.pages.map(page => 
-            page.id === state.activePageId 
-            ? { ...page, layers: page.layers.map(l => l.id === id ? { ...l, ...data } : l) }
+            page.id === pageId 
+            ? { ...page, layers: page.layers.map(l => l.id === layerId ? { ...l, ...data } : l) }
             : page
         )
       })),
 
-      addLayer: (type, shapeType = 'rect') => set((state) => {
+      addLayer: (pageId, type, shapeType = 'rect') => set((state) => {
         const baseLayer: Layer = {
           id: crypto.randomUUID(),
           type,
           shapeType,
-          x: 100, y: 100,
+          x: 50, y: 50,
           width: 200, height: 200,
           zIndex: 10,
           bgColor: '#EAFFD0',
@@ -172,38 +184,39 @@ export const useBrandStore = create<BrandState>()(
         
         return {
             pages: state.pages.map(page => 
-                page.id === state.activePageId 
+                page.id === pageId 
                 ? { ...page, layers: [...page.layers, baseLayer] }
                 : page
             ),
-            selectedId: baseLayer.id
+            selectedLayerId: baseLayer.id,
+            activePageId: pageId
         }
       }),
 
-      removeLayer: (id) => set((state) => ({
+      removeLayer: (pageId, layerId) => set((state) => ({
         pages: state.pages.map(page => 
-            page.id === state.activePageId 
-            ? { ...page, layers: page.layers.filter(l => l.id !== id) }
+            page.id === pageId 
+            ? { ...page, layers: page.layers.filter(l => l.id !== layerId) }
             : page
         ),
-        selectedId: null
+        selectedLayerId: null
       })),
 
-      bringToFront: (id) => set((state) => {
-        const page = state.pages.find(p => p.id === state.activePageId)
+      bringToFront: (pageId, layerId) => set((state) => {
+        const page = state.pages.find(p => p.id === pageId)
         if (!page) return state
         const maxZ = Math.max(...page.layers.map(l => l.zIndex)) || 1
         return {
             pages: state.pages.map(p => 
-                p.id === state.activePageId 
-                ? { ...p, layers: p.layers.map(l => l.id === id ? { ...l, zIndex: maxZ + 1 } : l) }
+                p.id === pageId 
+                ? { ...p, layers: p.layers.map(l => l.id === layerId ? { ...l, zIndex: maxZ + 1 } : l) }
                 : p
             )
         }
       })
     }),
     {
-      name: 'bento-pro-v5',
+      name: 'bento-pro-v6',
       storage: createJSONStorage(() => localStorage),
     }
   )
